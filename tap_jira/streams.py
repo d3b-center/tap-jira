@@ -395,9 +395,9 @@ class IssueStream(JiraStream):
 
 
     name = "issues"
-    path = "/search"
-    primary_keys = ("id",)
-    replication_key = "id"
+    path = "/search?maxResults=10"
+    primary_keys = ["id"]
+    replication_key = "updated_at"
     replication_method = "INCREMENTAL"
     records_jsonpath = "$[issues][*]"  # Or override `parse_response`.
     instance_name = "issues"
@@ -561,7 +561,6 @@ class IssueStream(JiraStream):
         Property("id", StringType),
         Property("self", StringType),
         Property("key", StringType),
-        Property("updated_at", DateTimeType),
         Property("updated_at", DateTimeType),
         Property(
             "fields",
@@ -2138,10 +2137,6 @@ class IssueStream(JiraStream):
         
         row["updated_at"] = row["fields"].pop("updated")
         
-    def post_process(self, row: dict, context: dict) -> dict: 
-        
-        row["updated_at"] = row["fields"].pop("updated")
-        
         # dafault value for array, would remove once handled at SDK level
         for key_set_default in [
             "customfield_10010",
@@ -2171,8 +2166,6 @@ class IssueStream(JiraStream):
         ]:
             if row["fields"].get(key_set_default) is None:
                 row["fields"][key_set_default] = []
-            
-            
         return row
 
 
@@ -3480,7 +3473,7 @@ class IssueWatchersStream(JiraStream):
     name = "issue_watchers"
     path = "/issue/{issue_id}/watchers"
     parent_stream_type = IssueStream
-    ignore_parent_replication_keys = True
+    ignore_parent_replication_keys = False
     primary_keys = ("accountId",)
     records_jsonpath = "$[watchers][*]"
     instance_name = ""
@@ -3518,7 +3511,6 @@ class IssueChangeLogStream(JiraStream):
 
     parent_stream_type = IssueStream
 
-    ignore_parent_replication_keys = False
     ignore_parent_replication_keys = False
 
     path = "/issue/{issue_id}/changelog"
@@ -3579,7 +3571,6 @@ class IssueComments(JiraStream):
 
     parent_stream_type = IssueStream
 
-    ignore_parent_replication_keys = False
     ignore_parent_replication_keys = False
 
     path = "/issue/{issue_id}/comment"
@@ -3644,7 +3635,6 @@ class IssueWorklogs(JiraStream):
 
     parent_stream_type = IssueStream
 
-    ignore_parent_replication_keys = False
     ignore_parent_replication_keys = False
 
     path = "/issue/{issue_id}/worklog"
