@@ -562,6 +562,7 @@ class IssueStream(JiraStream):
         Property("self", StringType),
         Property("key", StringType),
         Property("updated_at", DateTimeType),
+        Property("updated_at", DateTimeType),
         Property(
             "fields",
             ObjectType(
@@ -2137,6 +2138,10 @@ class IssueStream(JiraStream):
         
         row["updated_at"] = row["fields"].pop("updated")
         
+    def post_process(self, row: dict, context: dict) -> dict: 
+        
+        row["updated_at"] = row["fields"].pop("updated")
+        
         # dafault value for array, would remove once handled at SDK level
         for key_set_default in [
             "customfield_10010",
@@ -2166,6 +2171,7 @@ class IssueStream(JiraStream):
         ]:
             if row["fields"].get(key_set_default) is None:
                 row["fields"][key_set_default] = []
+            
             
         return row
 
@@ -3513,6 +3519,7 @@ class IssueChangeLogStream(JiraStream):
     parent_stream_type = IssueStream
 
     ignore_parent_replication_keys = False
+    ignore_parent_replication_keys = False
 
     path = "/issue/{issue_id}/changelog"
 
@@ -3572,6 +3579,7 @@ class IssueComments(JiraStream):
 
     parent_stream_type = IssueStream
 
+    ignore_parent_replication_keys = False
     ignore_parent_replication_keys = False
 
     path = "/issue/{issue_id}/comment"
@@ -3636,6 +3644,7 @@ class IssueWorklogs(JiraStream):
 
     parent_stream_type = IssueStream
 
+    ignore_parent_replication_keys = False
     ignore_parent_replication_keys = False
 
     path = "/issue/{issue_id}/worklog"
