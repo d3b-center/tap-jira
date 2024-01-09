@@ -384,10 +384,11 @@ class IssueStream(JiraStream):
     records_jsonpath = json response body
     """
 
+
     name = "issues"
     path = "/search?maxResults=10"
     primary_keys = ["id"]
-    replication_key = "id"
+    replication_key = "updated_at"
     replication_method = "INCREMENTAL"
     records_jsonpath = "$[issues][*]"  # Or override `parse_response`.
     instance_name = "issues"
@@ -718,6 +719,7 @@ class IssueStream(JiraStream):
         Property("id", StringType),
         Property("self", StringType),
         Property("key", StringType),
+        Property("updated_at", DateTimeType),
         Property(
             "fields",
             ObjectType(
@@ -2098,6 +2100,14 @@ class IssueStream(JiraStream):
                 Property("customfield_11430", base_item_schema),
                 Property("customfield_11310", ArrayType(base_item_schema)),
                 Property("customfield_10100", StringType),
+                Property("customfield_10133", StringType),
+                Property("customfield_10134", StringType),
+                Property("customfield_10135", StringType),
+                Property("customfield_10136", StringType),
+                Property("customfield_10137", StringType),
+                Property("customfield_10138", StringType),
+                Property("customfield_10139", StringType),
+                Property("customfield_10140", StringType),
                 Property("customfield_11431", ArrayType(base_item_schema)),
                 Property("customfield_11311", base_item_schema),
                 Property("customfield_11434", NumberType),
@@ -2295,6 +2305,9 @@ class IssueStream(JiraStream):
 
         if "start_date" in self.config:
             start_date = self.config["start_date"]
+            if self.get_starting_timestamp(context):
+                start_date = str(self.get_starting_timestamp(context).date())
+            
             params["jql"].append(f"(created>={start_date} or updated>={start_date})")
 
         if "end_date" in self.config:
@@ -2314,7 +2327,10 @@ class IssueStream(JiraStream):
         """Return a context dictionary for child streams."""
         return {"issue_id": record["id"]}
 
-    def post_process(self, row: dict, context: dict | None = None) -> dict | None:
+    def post_process(self, row: dict, context: dict) -> dict: 
+        
+        row["updated_at"] = row["fields"].pop("updated")
+        
         # dafault value for array, would remove once handled at SDK level
         for key_set_default in [
             "customfield_10010",
@@ -2344,6 +2360,7 @@ class IssueStream(JiraStream):
         ]:
             if row["fields"].get(key_set_default) is None:
                 row["fields"][key_set_default] = []
+            
         return row
 
 
@@ -3206,7 +3223,6 @@ class AuditingStream(JiraStream):
         ),
     ).to_dict()
 
-
 class DashboardStream(JiraStream):
 
     """
@@ -3632,7 +3648,7 @@ class IssueWatchersStream(JiraStream):
     name = "issue_watchers"
     path = "/issue/{issue_id}/watchers"
     parent_stream_type = IssueStream
-    ignore_parent_replication_keys = True
+    ignore_parent_replication_keys = False
     primary_keys = ["id"]
     records_jsonpath = "$[*]"  # Or override `parse_response`.
     instance_name = ""
@@ -3678,7 +3694,7 @@ class IssueChangeLogStream(JiraStream):
 
     parent_stream_type = IssueStream
 
-    ignore_parent_replication_keys = True
+    ignore_parent_replication_keys = False
 
     path = "/issue/{issue_id}/changelog"
 
@@ -3737,7 +3753,7 @@ class IssueComments(JiraStream):
 
     parent_stream_type = IssueStream
 
-    ignore_parent_replication_keys = True
+    ignore_parent_replication_keys = False
 
     path = "/issue/{issue_id}/comment"
 
@@ -3822,7 +3838,7 @@ class IssueWorklogs(JiraStream):
 
     parent_stream_type = IssueStream
 
-    ignore_parent_replication_keys = True
+    ignore_parent_replication_keys = False
 
     path = "/issue/{issue_id}/worklog"
 
