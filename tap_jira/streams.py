@@ -1,4 +1,4 @@
-    """Stream type classes for tap-jira."""
+"""Stream type classes for tap-jira."""
 
 from __future__ import annotations
 
@@ -13,7 +13,6 @@ from tap_jira.client import JiraStream
 
 if t.TYPE_CHECKING:
     import requests
-    from singer_sdk.helpers.types import Context, Record
 
 PropertiesList = th.PropertiesList
 Property = th.Property
@@ -393,10 +392,9 @@ class IssueStream(JiraStream):
     records_jsonpath = json response body
     """
 
-
     name = "issues"
     path = "/search?maxResults=10"
-    primary_keys = ["id"]
+    primary_keys: t.ClassVar[list] = ["id"]
     replication_key = "updated_at"
     replication_method = "INCREMENTAL"
     records_jsonpath = "$[issues][*]"  # Or override `parse_response`.
@@ -554,6 +552,174 @@ class IssueStream(JiraStream):
                 ),
             ),
         ),
+    )
+
+    base_content_schema = ObjectType(
+        Property(
+            "content",
+            ArrayType(
+                ObjectType(
+                    Property("version", IntegerType),
+                    Property("text", StringType),
+                    Property("type", StringType),
+                    Property("content", __content_schema),
+                    Property(
+                        "attrs",
+                        ObjectType(
+                            Property("href", StringType),
+                            Property("colspan", IntegerType),
+                            Property("alt", StringType),
+                            Property("timestamp", StringType),
+                            Property(
+                                "colwidth",
+                                ArrayType(IntegerType),
+                            ),
+                            Property("language", StringType),
+                            Property("background", StringType),
+                            Property(
+                                "isNumberColumnEnabled",
+                                BooleanType,
+                            ),
+                            Property("localId", StringType),
+                            Property("color", StringType),
+                            Property("panelType", StringType),
+                            Property("level", IntegerType),
+                            Property("accessLevel", StringType),
+                            Property("style", StringType),
+                            Property("order", IntegerType),
+                            Property("text", StringType),
+                            Property("shortName", StringType),
+                            Property("url", StringType),
+                            Property("layout", StringType),
+                            Property("id", StringType),
+                            Property("type", StringType),
+                            Property("collection", StringType),
+                            Property("width", NumberType),
+                            Property("height", NumberType),
+                            Property("occurrenceKey", StringType),
+                        ),
+                    ),
+                    Property(
+                        "marks",
+                        ArrayType(
+                            ObjectType(
+                                Property("type", StringType),
+                                Property(
+                                    "attrs",
+                                    ObjectType(
+                                        Property(
+                                            "href",
+                                            StringType,
+                                        ),
+                                        Property(
+                                            "colspan",
+                                            IntegerType,
+                                        ),
+                                        Property(
+                                            "alt",
+                                            StringType,
+                                        ),
+                                        Property(
+                                            "timestamp",
+                                            StringType,
+                                        ),
+                                        Property(
+                                            "colwidth",
+                                            ArrayType(IntegerType),
+                                        ),
+                                        Property(
+                                            "language",
+                                            StringType,
+                                        ),
+                                        Property(
+                                            "background",
+                                            StringType,
+                                        ),
+                                        Property(
+                                            "isNumberColumnEnabled",
+                                            BooleanType,
+                                        ),
+                                        Property(
+                                            "localId",
+                                            StringType,
+                                        ),
+                                        Property(
+                                            "color",
+                                            StringType,
+                                        ),
+                                        Property(
+                                            "panelType",
+                                            StringType,
+                                        ),
+                                        Property(
+                                            "level",
+                                            IntegerType,
+                                        ),
+                                        Property(
+                                            "accessLevel",
+                                            StringType,
+                                        ),
+                                        Property(
+                                            "style",
+                                            StringType,
+                                        ),
+                                        Property(
+                                            "order",
+                                            IntegerType,
+                                        ),
+                                        Property(
+                                            "text",
+                                            StringType,
+                                        ),
+                                        Property(
+                                            "shortName",
+                                            StringType,
+                                        ),
+                                        Property(
+                                            "url",
+                                            StringType,
+                                        ),
+                                        Property(
+                                            "layout",
+                                            StringType,
+                                        ),
+                                        Property("id", StringType),
+                                        Property(
+                                            "type",
+                                            StringType,
+                                        ),
+                                        Property(
+                                            "collection",
+                                            StringType,
+                                        ),
+                                        Property(
+                                            "width",
+                                            NumberType,
+                                        ),
+                                        Property(
+                                            "height",
+                                            NumberType,
+                                        ),
+                                        Property(
+                                            "occurrenceKey",
+                                            StringType,
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+        Property("type", StringType),
+        Property("version", IntegerType),
+    )
+
+    base_item_schema = ObjectType(
+        Property("id", StringType),
+        Property("self", StringType),
+        Property("value", StringType),
     )
 
     schema = PropertiesList(
@@ -1754,7 +1920,6 @@ class IssueStream(JiraStream):
                 Property("customfield_11461", NumberType),
                 Property("customfield_11340", StringType),
                 Property("customfield_11460", StringType),
-                # Property("customfield_11584", StringType),
                 Property("customfield_11463", NumberType),
                 Property("customfield_11341", base_item_schema),
                 Property("customfield_11583", base_item_schema),
@@ -1765,7 +1930,7 @@ class IssueStream(JiraStream):
                             Property("_link", StringType),
                             Property("id", StringType),
                             Property("name", StringType),
-                        )
+                        ),
                     ),
                 ),
                 Property("customfield_11586", StringType),
@@ -1778,7 +1943,6 @@ class IssueStream(JiraStream):
                 Property("customfield_11466", NumberType),
                 Property("customfield_11345", StringType),
                 Property("customfield_11587", StringType),
-                # Property("customfield_11458", StringType),
                 Property("customfield_11336", NumberType),
                 Property("customfield_11457", base_item_schema),
                 Property("customfield_11339", StringType),
@@ -1945,7 +2109,8 @@ class IssueStream(JiraStream):
                             ObjectType(
                                 Property("_expands", ArrayType(StringType)),
                                 Property(
-                                    "_links", ObjectType(Property("self", StringType))
+                                    "_links",
+                                    ObjectType(Property("self", StringType)),
                                 ),
                                 Property("description", StringType),
                                 Property("groupIds", ArrayType(StringType)),
@@ -2080,7 +2245,7 @@ class IssueStream(JiraStream):
 
     def get_url_params(
         self,
-        context: dict | None,  # noqa: ARG002
+        context: dict | None,
         next_page_token: t.Any | None,  # noqa: ANN401
     ) -> dict[str, t.Any]:
         """Return a dictionary of query parameters."""
@@ -2101,7 +2266,7 @@ class IssueStream(JiraStream):
             start_date = self.config["start_date"]
             if self.get_starting_timestamp(context):
                 start_date = str(self.get_starting_timestamp(context).date())
-            
+
             jql.append(f"(created>='{start_date}' or updated>='{start_date}')")
 
         if "end_date" in self.config:
@@ -2120,23 +2285,14 @@ class IssueStream(JiraStream):
 
         return params
 
-    def post_process(self, row: Record, context: Context | None = None) -> Record:  # noqa: ARG002
-        """Post-process the record.
-
-        - Add top-level `created` field.
-        """
-        created = row.get("fields", {}).pop("created", None)
-        row["created"] = created
-        return row
-
     def get_child_context(self, record: dict, context: dict | None) -> dict:  # noqa: ARG002
         """Return a context dictionary for child streams."""
         return {"issue_id": record["id"]}
 
-    def post_process(self, row: dict, context: dict) -> dict: 
-        
+    def post_process(self, row: dict, context: dict) -> dict:  # noqa: ARG002
+        """Post-process the record."""
         row["updated_at"] = row["fields"].pop("updated")
-        
+
         # dafault value for array, would remove once handled at SDK level
         for key_set_default in [
             "customfield_10010",
@@ -3042,6 +3198,7 @@ class AuditingStream(JiraStream):
             ),
         ),
     ).to_dict()
+
 
 class DashboardStream(JiraStream):
     """Dashboard stream.
