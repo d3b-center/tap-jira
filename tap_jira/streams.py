@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Optional
+import functools
+import operator
+import typing as t
+from http import HTTPStatus
 
 from singer_sdk import typing as th  # JSON Schema typing helpers
 
 from tap_jira.client import JiraStream
 
-import requests
+if t.TYPE_CHECKING:
+    import requests
 
 PropertiesList = th.PropertiesList
 Property = th.Property
@@ -21,12 +24,21 @@ ArrayType = th.ArrayType
 BooleanType = th.BooleanType
 IntegerType = th.IntegerType
 NumberType = th.NumberType
-role = {}
+
+
+ADFRootBlockNode = ObjectType(
+    Property("type", StringType),
+    Property("version", IntegerType),
+    Property(
+        "content",
+        ArrayType(ObjectType(additional_properties=True)),
+    ),
+)
 
 
 class UsersStream(JiraStream):
+    """Users stream.
 
-    """
     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-users/#api-rest-api-3-user-get
     """
 
@@ -40,11 +52,10 @@ class UsersStream(JiraStream):
 
     name = "users"
     path = "/users/search"
-    primary_keys = ["accountId"]
+    primary_keys = ("accountId",)
     replication_key = "accountId"
     replication_method = "INCREMENTAL"
     records_jsonpath = "$[*]"
-    next_page_token_jsonpath = None
 
     schema = PropertiesList(
         Property("self", StringType),
@@ -71,8 +82,8 @@ class UsersStream(JiraStream):
     def get_next_page_token(
         self,
         response: requests.Response,
-        previous_token: t.Any | None,
-    ) -> t.Any | None:
+        previous_token: t.Any | None,  # noqa: ANN401
+    ) -> t.Any | None:  # noqa: ANN401
         """Return a token for identifying next page or None if no more pages."""
         # If pagination is required, return a token which can be used to get the
         #       next page. If this is the final page, return "None" to end the
@@ -89,8 +100,8 @@ class UsersStream(JiraStream):
 
 
 class FieldStream(JiraStream):
+    """Field stream.
 
-    """
     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-fields/#api-rest-api-3-field-get
     """
 
@@ -105,7 +116,7 @@ class FieldStream(JiraStream):
 
     name = "fields"
     path = "/field"
-    primary_keys = ["id"]
+    primary_keys = ("id",)
     replication_key = "id"
     replication_method = "INCREMENTAL"
     instance_name = ""
@@ -146,10 +157,7 @@ class FieldStream(JiraStream):
                         Property("customRenderer", BooleanType),
                         Property("readOnly", BooleanType),
                         Property("environment", StringType),
-                        Property(
-                            "com.atlassian.jira.plugin.system.customfieldtypes:atlassian-team",
-                            BooleanType,
-                        ),
+                        Property("atlassian_team", BooleanType),
                     ),
                 ),
             ),
@@ -158,8 +166,8 @@ class FieldStream(JiraStream):
 
 
 class ServerInfoStream(JiraStream):
+    """Server info stream.
 
-    """
     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-server-info/#api-rest-api-3-serverinfo-get
     """
 
@@ -173,7 +181,7 @@ class ServerInfoStream(JiraStream):
 
     name = "server_info"
     path = "/serverInfo"
-    primary_keys = ["baseUrl"]
+    primary_keys = ("baseUrl",)
     replication_key = "serverTime"
     replication_method = "INCREMENTAL"
     instance_name = ""
@@ -198,8 +206,8 @@ class ServerInfoStream(JiraStream):
 
 
 class IssueTypeStream(JiraStream):
+    """Issue type stream.
 
-    """
     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-types/#api-rest-api-3-issuetype-get
     """
 
@@ -214,7 +222,7 @@ class IssueTypeStream(JiraStream):
 
     name = "issue_types"
     path = "/issuetype"
-    primary_keys = ["id"]
+    primary_keys = ("id",)
     replication_key = "id"
     replication_method = "INCREMENTAL"
     records_jsonpath = "$[*]"  # Or override `parse_response`.
@@ -248,8 +256,8 @@ class IssueTypeStream(JiraStream):
 
 
 class WorkflowStatusStream(JiraStream):
+    """Workflow status stream.
 
-    """
     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-workflow-statuses/#api-rest-api-3-status-get
     """
 
@@ -263,7 +271,7 @@ class WorkflowStatusStream(JiraStream):
 
     name = "workflow_statuses"
     path = "/status"
-    primary_keys = ["id"]
+    primary_keys = ("id",)
     replication_key = "self"
     replication_method = "INCREMENTAL"
     instance_name = ""
@@ -301,8 +309,8 @@ class WorkflowStatusStream(JiraStream):
 
 
 class ProjectStream(JiraStream):
+    """Project stream.
 
-    """
     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-projects/#api-rest-api-3-project-get
     """
 
@@ -317,7 +325,7 @@ class ProjectStream(JiraStream):
 
     name = "projects"
     path = "/project/search"
-    primary_keys = ["id"]
+    primary_keys = ("id",)
     replication_key = "id"
     replication_method = "INCREMENTAL"
     records_jsonpath = "$[values][*]"  # Or override `parse_response`.
@@ -370,8 +378,8 @@ class ProjectStream(JiraStream):
 
 
 class IssueStream(JiraStream):
+    """Issue stream.
 
-    """
     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/#api-rest-api-3-search-get
     """
 
@@ -384,16 +392,15 @@ class IssueStream(JiraStream):
     records_jsonpath = json response body
     """
 
-
     name = "issues"
     path = "/search?maxResults=10"
-    primary_keys = ["id"]
+    primary_keys: t.ClassVar[list] = ["id"]
     replication_key = "updated_at"
     replication_method = "INCREMENTAL"
     records_jsonpath = "$[issues][*]"  # Or override `parse_response`.
     instance_name = "issues"
 
-    __content_schema = __content_schema = ArrayType(
+    __content_schema = ArrayType(
         ObjectType(
             Property("version", IntegerType),
             Property("text", StringType),
@@ -544,7 +551,7 @@ class IssueStream(JiraStream):
                     ),
                 ),
             ),
-        )
+        ),
     )
 
     base_content_schema = ObjectType(
@@ -702,12 +709,13 @@ class IssueStream(JiraStream):
                             ),
                         ),
                     ),
-                )
+                ),
             ),
         ),
         Property("type", StringType),
         Property("version", IntegerType),
     )
+
     base_item_schema = ObjectType(
         Property("id", StringType),
         Property("self", StringType),
@@ -796,8 +804,6 @@ class IssueStream(JiraStream):
                     ),
                 ),
                 Property("timespent", IntegerType),
-                Property("customfield_10030", ArrayType(StringType)),
-                Property("customfield_10031", ArrayType(StringType)),
                 Property(
                     "project",
                     ObjectType(
@@ -818,7 +824,6 @@ class IssueStream(JiraStream):
                         ),
                     ),
                 ),
-                Property("customfield_10032", StringType),
                 Property(
                     "fixVersions",
                     ArrayType(
@@ -828,13 +833,10 @@ class IssueStream(JiraStream):
                             Property("name", StringType),
                             Property("released", BooleanType),
                             Property("self", StringType),
-                        )
+                        ),
                     ),
                 ),
-                Property("customfield_10033", StringType),
-                Property("customfield_10034", StringType),
                 Property("aggregatetimespent", IntegerType),
-                Property("customfield_10035", StringType),
                 Property(
                     "resolution",
                     ObjectType(
@@ -844,8 +846,6 @@ class IssueStream(JiraStream):
                         Property("self", StringType),
                     ),
                 ),
-                Property("customfield_10036", StringType),
-                Property("customfield_10037", StringType),
                 Property("resolutiondate", StringType),
                 Property("workratio", IntegerType),
                 Property(
@@ -860,33 +860,6 @@ class IssueStream(JiraStream):
                 Property("lastViewed", StringType),
                 Property("created", StringType),
                 Property(
-                    "customfield_10020",
-                    ArrayType(
-                        ObjectType(
-                            Property("boardId", IntegerType),
-                            Property("completeDate", StringType),
-                            Property("endDate", StringType),
-                            Property("goal", StringType),
-                            Property("id", IntegerType),
-                            Property("name", StringType),
-                            Property("startDate", StringType),
-                            Property("state", StringType),
-                        ),
-                    ),
-                ),
-                Property(
-                    "customfield_10021",
-                    ArrayType(
-                        ObjectType(
-                            Property("id", StringType),
-                            Property("self", StringType),
-                            Property("value", StringType),
-                        ),
-                    ),
-                ),
-                Property("customfield_10022", StringType),
-                Property("customfield_10023", StringType),
-                Property(
                     "priority",
                     ObjectType(
                         Property("self", StringType),
@@ -895,26 +868,7 @@ class IssueStream(JiraStream):
                         Property("id", StringType),
                     ),
                 ),
-                Property("customfield_10024", StringType),
-                Property("customfield_10025", StringType),
                 Property("labels", ArrayType(StringType)),
-                Property("customfield_10016", NumberType),
-                Property("customfield_10017", StringType),
-                Property(
-                    "customfield_10018",
-                    ObjectType(
-                        Property("hasEpicLinkFieldDependency", BooleanType),
-                        Property("showField", BooleanType),
-                        Property(
-                            "nonEditableReason",
-                            ObjectType(
-                                Property("reason", StringType),
-                                Property("message", StringType),
-                            ),
-                        ),
-                    ),
-                ),
-                Property("customfield_10019", StringType),
                 Property("timeestimate", IntegerType),
                 Property("aggregatetimeoriginalestimate", IntegerType),
                 Property("versions", ArrayType(StringType)),
@@ -936,7 +890,8 @@ class IssueStream(JiraStream):
                                                     Property("description", StringType),
                                                     Property("entityId", StringType),
                                                     Property(
-                                                        "hierarchyLevel", IntegerType
+                                                        "hierarchyLevel",
+                                                        IntegerType,
                                                     ),
                                                     Property("iconUrl", StringType),
                                                     Property("id", StringType),
@@ -966,15 +921,18 @@ class IssueStream(JiraStream):
                                                         "statusCategory",
                                                         ObjectType(
                                                             Property(
-                                                                "colorName", StringType
+                                                                "colorName",
+                                                                StringType,
                                                             ),
                                                             Property("id", IntegerType),
                                                             Property("key", StringType),
                                                             Property(
-                                                                "name", StringType
+                                                                "name",
+                                                                StringType,
                                                             ),
                                                             Property(
-                                                                "self", StringType
+                                                                "self",
+                                                                StringType,
                                                             ),
                                                         ),
                                                     ),
@@ -1001,7 +959,8 @@ class IssueStream(JiraStream):
                                                     Property("description", StringType),
                                                     Property("entityId", StringType),
                                                     Property(
-                                                        "hierarchyLevel", IntegerType
+                                                        "hierarchyLevel",
+                                                        IntegerType,
                                                     ),
                                                     Property("iconUrl", StringType),
                                                     Property("id", StringType),
@@ -1031,15 +990,18 @@ class IssueStream(JiraStream):
                                                         "statusCategory",
                                                         ObjectType(
                                                             Property(
-                                                                "colorName", StringType
+                                                                "colorName",
+                                                                StringType,
                                                             ),
                                                             Property("id", IntegerType),
                                                             Property("key", StringType),
                                                             Property(
-                                                                "name", StringType
+                                                                "name",
+                                                                StringType,
                                                             ),
                                                             Property(
-                                                                "self", StringType
+                                                                "self",
+                                                                StringType,
                                                             ),
                                                         ),
                                                     ),
@@ -1116,7 +1078,7 @@ class IssueStream(JiraStream):
                             Property("self", StringType),
                             Property("id", StringType),
                             Property("name", StringType),
-                        )
+                        ),
                     ),
                 ),
                 Property("timeoriginalestimate", IntegerType),
@@ -1142,12 +1104,14 @@ class IssueStream(JiraStream):
                                             Property("colspan", IntegerType),
                                             Property("alt", StringType),
                                             Property(
-                                                "colwidth", ArrayType(IntegerType)
+                                                "colwidth",
+                                                ArrayType(IntegerType),
                                             ),
                                             Property("background", StringType),
                                             Property("color", StringType),
                                             Property(
-                                                "isNumberColumnEnabled", BooleanType
+                                                "isNumberColumnEnabled",
+                                                BooleanType,
                                             ),
                                             Property("localId", StringType),
                                             Property("panelType", StringType),
@@ -1177,21 +1141,25 @@ class IssueStream(JiraStream):
                                                     ObjectType(
                                                         Property("href", StringType),
                                                         Property(
-                                                            "colspan", IntegerType
+                                                            "colspan",
+                                                            IntegerType,
                                                         ),
                                                         Property("alt", StringType),
                                                         Property(
-                                                            "timestamp", StringType
+                                                            "timestamp",
+                                                            StringType,
                                                         ),
                                                         Property(
-                                                            "language", StringType
+                                                            "language",
+                                                            StringType,
                                                         ),
                                                         Property(
                                                             "colwidth",
                                                             ArrayType(IntegerType),
                                                         ),
                                                         Property(
-                                                            "background", StringType
+                                                            "background",
+                                                            StringType,
                                                         ),
                                                         Property(
                                                             "isNumberColumnEnabled",
@@ -1200,29 +1168,34 @@ class IssueStream(JiraStream):
                                                         Property("localId", StringType),
                                                         Property("color", StringType),
                                                         Property(
-                                                            "panelType", StringType
+                                                            "panelType",
+                                                            StringType,
                                                         ),
                                                         Property("level", IntegerType),
                                                         Property(
-                                                            "accessLevel", StringType
+                                                            "accessLevel",
+                                                            StringType,
                                                         ),
                                                         Property("style", StringType),
                                                         Property("order", IntegerType),
                                                         Property("text", StringType),
                                                         Property(
-                                                            "shortName", StringType
+                                                            "shortName",
+                                                            StringType,
                                                         ),
                                                         Property("url", StringType),
                                                         Property("layout", StringType),
                                                         Property("id", StringType),
                                                         Property("type", StringType),
                                                         Property(
-                                                            "collection", StringType
+                                                            "collection",
+                                                            StringType,
                                                         ),
                                                         Property("width", NumberType),
                                                         Property("height", NumberType),
                                                         Property(
-                                                            "occurrenceKey", StringType
+                                                            "occurrenceKey",
+                                                            StringType,
                                                         ),
                                                     ),
                                                 ),
@@ -1241,21 +1214,25 @@ class IssueStream(JiraStream):
                                                     ObjectType(
                                                         Property("href", StringType),
                                                         Property(
-                                                            "colspan", IntegerType
+                                                            "colspan",
+                                                            IntegerType,
                                                         ),
                                                         Property("alt", StringType),
                                                         Property(
-                                                            "timestamp", StringType
+                                                            "timestamp",
+                                                            StringType,
                                                         ),
                                                         Property(
                                                             "colwidth",
                                                             ArrayType(IntegerType),
                                                         ),
                                                         Property(
-                                                            "language", StringType
+                                                            "language",
+                                                            StringType,
                                                         ),
                                                         Property(
-                                                            "background", StringType
+                                                            "background",
+                                                            StringType,
                                                         ),
                                                         Property(
                                                             "isNumberColumnEnabled",
@@ -1264,29 +1241,34 @@ class IssueStream(JiraStream):
                                                         Property("localId", StringType),
                                                         Property("color", StringType),
                                                         Property(
-                                                            "panelType", StringType
+                                                            "panelType",
+                                                            StringType,
                                                         ),
                                                         Property("level", IntegerType),
                                                         Property(
-                                                            "accessLevel", StringType
+                                                            "accessLevel",
+                                                            StringType,
                                                         ),
                                                         Property("style", StringType),
                                                         Property("order", IntegerType),
                                                         Property("text", StringType),
                                                         Property(
-                                                            "shortName", StringType
+                                                            "shortName",
+                                                            StringType,
                                                         ),
                                                         Property("url", StringType),
                                                         Property("layout", StringType),
                                                         Property("id", StringType),
                                                         Property("type", StringType),
                                                         Property(
-                                                            "collection", StringType
+                                                            "collection",
+                                                            StringType,
                                                         ),
                                                         Property("width", NumberType),
                                                         Property("height", NumberType),
                                                         Property(
-                                                            "occurrenceKey", StringType
+                                                            "occurrenceKey",
+                                                            StringType,
                                                         ),
                                                     ),
                                                 ),
@@ -1295,7 +1277,8 @@ class IssueStream(JiraStream):
                                                     ArrayType(
                                                         ObjectType(
                                                             Property(
-                                                                "type", StringType
+                                                                "type",
+                                                                StringType,
                                                             ),
                                                             Property(
                                                                 "attrs",
@@ -1319,7 +1302,7 @@ class IssueStream(JiraStream):
                                                                     Property(
                                                                         "colwidth",
                                                                         ArrayType(
-                                                                            IntegerType
+                                                                            IntegerType,
                                                                         ),
                                                                     ),
                                                                     Property(
@@ -1379,7 +1362,8 @@ class IssueStream(JiraStream):
                                                                         StringType,
                                                                     ),
                                                                     Property(
-                                                                        "id", StringType
+                                                                        "id",
+                                                                        StringType,
                                                                     ),
                                                                     Property(
                                                                         "type",
@@ -1452,7 +1436,7 @@ class IssueStream(JiraStream):
                                                                                 Property(
                                                                                     "colwidth",
                                                                                     ArrayType(
-                                                                                        IntegerType
+                                                                                        IntegerType,
                                                                                     ),
                                                                                 ),
                                                                                 Property(
@@ -1567,7 +1551,7 @@ class IssueStream(JiraStream):
                                                                                             Property(
                                                                                                 "colwidth",
                                                                                                 ArrayType(
-                                                                                                    IntegerType
+                                                                                                    IntegerType,
                                                                                                 ),
                                                                                             ),
                                                                                             Property(
@@ -1655,14 +1639,16 @@ class IssueStream(JiraStream):
                                                                                 ),
                                                                             ),
                                                                         ),
-                                                                    )
+                                                                    ),
                                                                 ),
                                                             ),
                                                             Property(
-                                                                "type", StringType
+                                                                "type",
+                                                                StringType,
                                                             ),
                                                             Property(
-                                                                "version", IntegerType
+                                                                "version",
+                                                                IntegerType,
                                                             ),
                                                         ),
                                                     ),
@@ -1675,30 +1661,9 @@ class IssueStream(JiraStream):
                         ),
                     ),
                 ),
-                Property("customfield_10010", ArrayType(base_item_schema)),
-                Property("customfield_10014", StringType),
                 Property("timetracking", StringType),
-                Property("customfield_10015", StringType),
-                Property(
-                    "customfield_10005",
-                    ArrayType(
-                        ObjectType(
-                            Property("id", IntegerType),
-                            Property("boardId", IntegerType),
-                            Property("name", StringType),
-                            Property("state", StringType),
-                            Property("goal", DateTimeType),
-                            Property("startDate", DateTimeType),
-                            Property("completeDate", DateTimeType),
-                        )
-                    ),
-                ),
-                Property("customfield_10006", StringType),
-                Property("customfield_10007", StringType),
                 Property("security", StringType),
-                Property("customfield_10008", base_item_schema),
                 Property("aggregatetimeestimate", IntegerType),
-                Property("customfield_10009", StringType),
                 Property("attachment", ArrayType(StringType)),
                 Property("summary", StringType),
                 Property(
@@ -1781,7 +1746,6 @@ class IssueStream(JiraStream):
                         ),
                     ),
                 ),
-                Property("customfield_10041", StringType),
                 Property(
                     "reporter",
                     ObjectType(
@@ -1803,8 +1767,6 @@ class IssueStream(JiraStream):
                         Property("accountType", StringType),
                     ),
                 ),
-                Property("customfield_10043", StringType),
-                Property("customfield_10044", StringType),
                 Property(
                     "aggregateprogress",
                     ObjectType(
@@ -1813,17 +1775,6 @@ class IssueStream(JiraStream):
                         Property("percent", IntegerType),
                     ),
                 ),
-                Property("customfield_10045", StringType),
-                Property("customfield_10001", ArrayType(StringType)),
-                Property("customfield_10002", NumberType),
-                Property("customfield_10003", NumberType),
-                Property("customfield_10004", StringType),
-                Property("customfield_10038", StringType),
-                Property("customfield_10039", StringType),
-                Property("customfield_10000", ArrayType(base_item_schema)),
-                Property("customfield_10042", StringType),
-                Property("customfield_10046", StringType),
-                Property("customfield_10047", StringType),
                 Property(
                     "environment",
                     ObjectType(
@@ -1969,7 +1920,6 @@ class IssueStream(JiraStream):
                 Property("customfield_11461", NumberType),
                 Property("customfield_11340", StringType),
                 Property("customfield_11460", StringType),
-                # Property("customfield_11584", StringType),
                 Property("customfield_11463", NumberType),
                 Property("customfield_11341", base_item_schema),
                 Property("customfield_11583", base_item_schema),
@@ -1980,7 +1930,7 @@ class IssueStream(JiraStream):
                             Property("_link", StringType),
                             Property("id", StringType),
                             Property("name", StringType),
-                        )
+                        ),
                     ),
                 ),
                 Property("customfield_11586", StringType),
@@ -1993,7 +1943,6 @@ class IssueStream(JiraStream):
                 Property("customfield_11466", NumberType),
                 Property("customfield_11345", StringType),
                 Property("customfield_11587", StringType),
-                # Property("customfield_11458", StringType),
                 Property("customfield_11336", NumberType),
                 Property("customfield_11457", base_item_schema),
                 Property("customfield_11339", StringType),
@@ -2160,7 +2109,8 @@ class IssueStream(JiraStream):
                             ObjectType(
                                 Property("_expands", ArrayType(StringType)),
                                 Property(
-                                    "_links", ObjectType(Property("self", StringType))
+                                    "_links",
+                                    ObjectType(Property("self", StringType)),
                                 ),
                                 Property("description", StringType),
                                 Property("groupIds", ArrayType(StringType)),
@@ -2296,11 +2246,14 @@ class IssueStream(JiraStream):
     def get_url_params(
         self,
         context: dict | None,
-        next_page_token: Any | None,
-    ) -> dict[str, Any]:
+        next_page_token: t.Any | None,  # noqa: ANN401
+    ) -> dict[str, t.Any]:
+        """Return a dictionary of query parameters."""
         params: dict = {}
 
-        params["jql"] = []  # init a query param
+        params["maxResults"] = self.config.get("page_size", {}).get("issues", 10)
+
+        jql: list[str] = []
 
         if next_page_token:
             params["startAt"] = next_page_token
@@ -2313,30 +2266,33 @@ class IssueStream(JiraStream):
             start_date = self.config["start_date"]
             if self.get_starting_timestamp(context):
                 start_date = str(self.get_starting_timestamp(context).date())
-            
-            params["jql"].append(f"(created>={start_date} or updated>={start_date})")
+
+            jql.append(f"(created>='{start_date}' or updated>='{start_date}')")
 
         if "end_date" in self.config:
             end_date = self.config["end_date"]
-            params["jql"].append(f"(created<{end_date} or updated<{start_date})")
+            jql.append(f"(created<'{end_date}' or updated<'{end_date}')")
 
-        if params["jql"]:
-            jql = " and ".join(params["jql"])
-            params["jql"] = jql
+        if (
+            base_jql := self.config.get("stream_options", {})
+            .get("issues", {})
+            .get("jql")
+        ):
+            jql.append(f"({base_jql})")
 
-        else:
-            params.pop("jql")  # drop if there's no query
+        if jql:
+            params["jql"] = " and ".join(jql)
 
         return params
 
-    def get_child_context(self, record: dict, context: Optional[dict]) -> dict:
+    def get_child_context(self, record: dict, context: dict | None) -> dict:  # noqa: ARG002
         """Return a context dictionary for child streams."""
         return {"issue_id": record["id"]}
 
-    def post_process(self, row: dict, context: dict) -> dict: 
-        
+    def post_process(self, row: dict, context: dict) -> dict:  # noqa: ARG002
+        """Post-process the record."""
         row["updated_at"] = row["fields"].pop("updated")
-        
+
         # dafault value for array, would remove once handled at SDK level
         for key_set_default in [
             "customfield_10010",
@@ -2366,13 +2322,12 @@ class IssueStream(JiraStream):
         ]:
             if row["fields"].get(key_set_default) is None:
                 row["fields"][key_set_default] = []
-            
         return row
 
 
 class PermissionStream(JiraStream):
+    """Permission stream.
 
-    """
     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-permissions/#api-rest-api-3-permissions-get
     """
 
@@ -2380,15 +2335,10 @@ class PermissionStream(JiraStream):
     name: stream name
     path: path which will be added to api url in client.py
     schema: instream schema
-    primary_keys = primary keys for the table
-    replication_key = datetime keys for replication
     """
 
     name = "permissions"
     path = "/permissions"
-    primary_keys = ["permissions"]
-    replication_key = "permissions"
-    replication_method = "INCREMENTAL"
     instance_name = ""
 
     schema = PropertiesList(
@@ -2797,8 +2747,8 @@ class PermissionStream(JiraStream):
 
 
 class ProjectRoleStream(JiraStream):
+    """Project role stream.
 
-    """
     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-project-roles/#api-rest-api-3-role-get
     """
 
@@ -2812,7 +2762,7 @@ class ProjectRoleStream(JiraStream):
 
     name = "project_roles"
     path = "/role"
-    primary_keys = ["id"]
+    primary_keys = ("id",)
     replication_key = "id"
     replication_method = "INCREMENTAL"
     instance_name = ""
@@ -2863,8 +2813,8 @@ class ProjectRoleStream(JiraStream):
 
 
 class PriorityStream(JiraStream):
+    """Priority stream.
 
-    """
     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-priorities/#api-rest-api-3-priority-get
     """
 
@@ -2878,7 +2828,7 @@ class PriorityStream(JiraStream):
 
     name = "priorities"
     path = "/priority"
-    primary_keys = ["id"]
+    primary_keys = ("id",)
     replication_key = "id"
     replication_method = "INCREMENTAL"
     instance_name = ""
@@ -2894,8 +2844,8 @@ class PriorityStream(JiraStream):
 
 
 class PermissionHolderStream(JiraStream):
+    """Permission holder stream.
 
-    """
     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-permission-schemes/#api-rest-api-3-permissionscheme-get
     """
 
@@ -2910,7 +2860,7 @@ class PermissionHolderStream(JiraStream):
 
     name = "permission_holders"
     path = "/permissionscheme"
-    primary_keys = ["id"]
+    primary_keys = ("id",)
     replication_key = "id"
     replication_method = "INCREMENTAL"
     records_jsonpath = "$[permissionSchemes][*]"  # Or override `parse_response`.
@@ -2957,7 +2907,8 @@ class PermissionHolderStream(JiraStream):
 
 
 class BoardStream(JiraStream):
-    """
+    """Board stream.
+
     https://developer.atlassian.com/cloud/jira/platform/jira-expressions-type-reference/#sprint
     """
 
@@ -2972,7 +2923,7 @@ class BoardStream(JiraStream):
 
     name = "boards"
     path = "/board"
-    primary_keys = ["id"]
+    primary_keys = ("id",)
     replication_key = "id"
     replication_method = "INCREMENTAL"
     records_jsonpath = "$[values][*]"  # Or override `parse_response`.
@@ -2998,17 +2949,20 @@ class BoardStream(JiraStream):
 
     @property
     def url_base(self) -> str:
+        """Return the base URL for the API requests."""
         domain = self.config["domain"]
-        return "https://{}:443/rest/agile/1.0".format(domain)
+        return f"https://{domain}:443/rest/agile/1.0"
 
-    def get_child_context(self, record: dict, context: Optional[dict]) -> dict:
+    def get_child_context(self, record: dict, context: dict | None) -> dict:  # noqa: ARG002
         """Return a context dictionary for child streams."""
         return {"board_id": record["id"]}
 
 
 class SprintStream(JiraStream):
-    """
-    https://developer.atlassian.com/cloud/jira/platform/jira-expressions-type-reference/#sprint
+    """Sprint stream.
+
+    * https://developer.atlassian.com/cloud/jira/software/rest/api-group-board/#api-rest-agile-1-0-board-boardid-sprint-get
+    * https://developer.atlassian.com/cloud/jira/platform/jira-expressions-type-reference/#sprint
     """
 
     """
@@ -3021,6 +2975,7 @@ class SprintStream(JiraStream):
     """
 
     name = "sprints"
+    primary_keys = ("id",)
     parent_stream_type = BoardStream
     path = "/board/{board_id}/sprint?maxResults=100"
     replication_method = "INCREMENTAL"
@@ -3033,9 +2988,9 @@ class SprintStream(JiraStream):
         Property("self", StringType),
         Property("state", StringType),
         Property("name", StringType),
-        Property("startDate", StringType),
-        Property("endDate", StringType),
-        Property("completeDate", StringType),
+        Property("startDate", DateTimeType),
+        Property("endDate", DateTimeType),
+        Property("completeDate", DateTimeType),
         Property("originBoardId", IntegerType),
         Property("goal", StringType),
         Property("boardId", IntegerType),
@@ -3043,27 +2998,42 @@ class SprintStream(JiraStream):
 
     @property
     def url_base(self) -> str:
+        """Return the base URL for the API requests."""
         domain = self.config["domain"]
-        return "https://{}:443/rest/agile/1.0".format(domain)
+        return f"https://{domain}:443/rest/agile/1.0"
 
-    def post_process(self, row: dict, context: dict) -> dict:
-        row["boardId"] = context["board_id"]
+    def post_process(self, row: dict, context: dict | None) -> dict:
+        """Post-process the record before it is returned."""
+        if context:
+            row["boardId"] = context["board_id"]
         return row
 
-    def get_records(self, context: dict | None) -> Iterable[dict[str, Any]]:
-        try:
-            for record in self.request_records(context):
-                transformed_record = self.post_process(record, context)
-                if transformed_record is None:
-                    continue
-                yield transformed_record
-        except Exception as e:
-            pass
+    def get_records(self, context: dict | None) -> t.Iterable[dict[str, t.Any]]:
+        """Get records from the API response."""
+        for record in self.request_records(context):
+            transformed_record = self.post_process(record, context)
+            if transformed_record is None:
+                continue
+            yield transformed_record
+
+    def validate_response(self, response: requests.Response) -> None:
+        """Validate the API response.
+
+        Allow for a 400 response if the board does not support sprints.
+        Do raise an error for other 400 responses.
+        """
+        if (
+            response.status_code == HTTPStatus.BAD_REQUEST
+            and "The board does not support sprints"
+            in response.json().get("errorMessages", [])
+        ):
+            return
+        super().validate_response(response)
 
 
 class ProjectRoleActorStream(JiraStream):
+    """Project role actor stream.
 
-    """
     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-project-role-actors/#api-rest-api-3-role-id-actors-get
     """
 
@@ -3078,7 +3048,7 @@ class ProjectRoleActorStream(JiraStream):
     name = "project_role_actors"
     path = "/role"
 
-    primary_keys = ["id"]
+    primary_keys = ("id",)
     replication_key = "id"
     replication_method = "INCREMENTAL"
     records_jsonpath = "$[*]"  # Or override `parse_response`.
@@ -3118,23 +3088,22 @@ class ProjectRoleActorStream(JiraStream):
         ),
     ).to_dict()
 
-    def get_records(self, context: dict | None) -> Iterable[dict[str, Any]]:
-        """
-        Takes each of the role ID's gathered above and adds to a list, then loops through the
-        list and gets data from the project role actor endpoint for each of the role ID's in the list
-        """
+    def get_records(self, context: dict | None) -> t.Iterable[dict[str, t.Any]]:
+        """Get records from the API response.
 
-        role_id = []
-        project_id = []
+        Takes each of the role ID's gathered above and adds to a list, then loops
+        through the list and gets data from the project role actor endpoint for each of
+        the role ID's in the list.
+        """
         role_actor_records = []
-
         project = ProjectStream(self._tap, schema={"properties": {}})
 
-        for record in list(super().get_records(context)):
-            role_id.append(record.get("id"))
+        role_id = [
+            record.get("id")
+            for record in list(ProjectRoleStream(self._tap).get_records(context))
+        ]
 
-        for record in list(project.get_records(context)):
-            project_id.append(record.get("id"))
+        project_id = [record.get("id") for record in list(project.get_records(context))]
 
         for pid in project_id:
             for role in role_id:
@@ -3144,32 +3113,33 @@ class ProjectRoleActorStream(JiraStream):
                         role_id = role
                         project_id = pid
                         name = "project_role_actor"
-                        path = "/project/{}/role/{}".format(project_id, role_id)
+                        path = f"/project/{project_id}/role/{role_id}"
                         instance_name = ""
 
                     project_role_actor = ProjectRoleActor(
-                        self._tap, schema={"properties": {}}
+                        self._tap,
+                        schema={"properties": {}},
                     )
 
                     role_actor_records.append(
-                        list(project_role_actor.get_records(context))
+                        list(project_role_actor.get_records(context)),
                     )
 
-                except:
+                except:  # noqa: E722, PERF203, S110
                     pass
 
-        project_role_actor_records = sum(role_actor_records, [])
-
-        return project_role_actor_records
+        return functools.reduce(
+            operator.iadd,
+            role_actor_records,
+            [],
+        )
 
 
 class AuditingStream(JiraStream):
+    """Auditing stream.
 
-    """
     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-audit-records/#api-rest-api-3-auditing-record-get
-    """
 
-    """
     name: stream name
     path: path which will be added to api url in client.py
     schema: instream schema
@@ -3180,7 +3150,7 @@ class AuditingStream(JiraStream):
 
     name = "audit_records"
     path = "/auditing/record"
-    primary_keys = ["id"]
+    primary_keys = ("id",)
     replication_key = "created"
     replication_method = "INCREMENTAL"
     records_jsonpath = "$[records][*]"  # Or override `parse_response`.
@@ -3229,13 +3199,12 @@ class AuditingStream(JiraStream):
         ),
     ).to_dict()
 
+
 class DashboardStream(JiraStream):
+    """Dashboard stream.
 
-    """
     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-dashboards/#api-rest-api-3-dashboard-get
-    """
 
-    """
     name: stream name
     path: path which will be added to api url in client.py
     schema: instream schema
@@ -3246,7 +3215,7 @@ class DashboardStream(JiraStream):
 
     name = "dashboards"
     path = "/dashboard"
-    primary_keys = ["id"]
+    primary_keys = ("id",)
     replication_key = "id"
     replication_method = "INCREMENTAL"
     records_jsonpath = "$[dashboards][*]"  # Or override `parse_response`.
@@ -3270,7 +3239,7 @@ class DashboardStream(JiraStream):
         Property(
             "editPermissions",
             ArrayType(
-                ObjectType(Property("id", IntegerType), Property("type", StringType))
+                ObjectType(Property("id", IntegerType), Property("type", StringType)),
             ),
         ),
         Property("view", StringType),
@@ -3280,12 +3249,10 @@ class DashboardStream(JiraStream):
 
 
 class FilterSearchStream(JiraStream):
+    """Filter search stream.
 
-    """
     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-filters/#api-rest-api-3-filter-search-get
-    """
 
-    """
     name: stream name
     path: path which will be added to api url in client.py
     schema: instream schema
@@ -3296,7 +3263,7 @@ class FilterSearchStream(JiraStream):
 
     name = "filter_searches"
     path = "/filter/search"
-    primary_keys = ["id"]
+    primary_keys = ("id",)
     replication_key = "id"
     replication_method = "INCREMENTAL"
     records_jsonpath = "$[values][*]"  # Or override `parse_response`.
@@ -3311,8 +3278,8 @@ class FilterSearchStream(JiraStream):
 
 
 class FilterDefaultShareScopeStream(JiraStream):
+    """Filter default share scope stream.
 
-    """
     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-filter-sharing/#api-rest-api-3-filter-defaultsharescope-get
     """
 
@@ -3326,7 +3293,7 @@ class FilterDefaultShareScopeStream(JiraStream):
 
     name = "filter_default_share_scopes"
     path = "/filter/defaultShareScope"
-    primary_keys = ["scope"]
+    primary_keys = ("scope",)
     replication_key = "scope"
     replication_method = "INCREMENTAL"
     instance_name = ""
@@ -3337,8 +3304,8 @@ class FilterDefaultShareScopeStream(JiraStream):
 
 
 class GroupsPickerStream(JiraStream):
+    """Groups picker stream.
 
-    """
     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-groups/#api-rest-api-3-groups-picker-get
     """
 
@@ -3353,7 +3320,7 @@ class GroupsPickerStream(JiraStream):
 
     name = "groups_pickers"
     path = "/groups/picker"
-    primary_keys = ["groupId"]
+    primary_keys = ("groupId",)
     replication_key = "groupId"
     replication_method = "INCREMENTAL"
     records_jsonpath = "$[groups][*]"  # Or override `parse_response`.
@@ -3377,8 +3344,8 @@ class GroupsPickerStream(JiraStream):
 
 
 class LicenseStream(JiraStream):
+    """License stream.
 
-    """
     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-license-metrics/#api-rest-api-3-instance-license-get
     """
 
@@ -3393,7 +3360,7 @@ class LicenseStream(JiraStream):
 
     name = "licenses"
     path = "/instance/license"
-    primary_keys = ["id"]
+    primary_keys = ("id",)
     replication_key = "id"
     replication_method = "INCREMENTAL"
     records_jsonpath = "$[applications][*]"  # Or override `parse_response`.
@@ -3406,8 +3373,8 @@ class LicenseStream(JiraStream):
 
 
 class ScreensStream(JiraStream):
+    """Screens stream.
 
-    """
     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-screens/#api-rest-api-3-screens-get
     """
 
@@ -3422,7 +3389,7 @@ class ScreensStream(JiraStream):
 
     name = "screens"
     path = "/screens"
-    primary_keys = ["id"]
+    primary_keys = ("id",)
     replication_key = "id"
     replication_method = "INCREMENTAL"
     records_jsonpath = "$[values][*]"  # Or override `parse_response`.
@@ -3448,8 +3415,8 @@ class ScreensStream(JiraStream):
 
 
 class ScreenSchemesStream(JiraStream):
+    """Screen schemes stream.
 
-    """
     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-screen-tab-fields/#api-rest-api-3-screens-screenid-tabs-tabid-fields-get
     """
 
@@ -3464,7 +3431,7 @@ class ScreenSchemesStream(JiraStream):
 
     name = "screen_schemes"
     path = "/screenscheme"
-    primary_keys = ["id"]
+    primary_keys = ("id",)
     replication_key = "id"
     replication_method = "INCREMENTAL"
     records_jsonpath = "$[values][*]"  # Or override `parse_response`.
@@ -3477,15 +3444,16 @@ class ScreenSchemesStream(JiraStream):
         Property(
             "screens",
             ObjectType(
-                Property("default", IntegerType), Property("create", IntegerType)
+                Property("default", IntegerType),
+                Property("create", IntegerType),
             ),
         ),
     ).to_dict()
 
 
 class StatusesSearchStream(JiraStream):
+    """Statuses search stream.
 
-    """
     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-screen-tab-fields/#api-rest-api-3-screens-screenid-tabs-tabid-fields-get
     """
 
@@ -3500,7 +3468,7 @@ class StatusesSearchStream(JiraStream):
 
     name = "statuses_searches"
     path = "/statuses/search"
-    primary_keys = ["id"]
+    primary_keys = ("id",)
     replication_key = "id"
     replication_method = "INCREMENTAL"
     records_jsonpath = "$[values][*]"  # Or override `parse_response`.
@@ -3521,8 +3489,8 @@ class StatusesSearchStream(JiraStream):
 
 
 class WorkflowStream(JiraStream):
+    """Workflow stream.
 
-    """
     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-workflows/#api-rest-api-3-workflow-get
     """
 
@@ -3536,7 +3504,7 @@ class WorkflowStream(JiraStream):
 
     name = "workflows"
     path = "/workflow"
-    primary_keys = ["name"]
+    primary_keys = ("name",)
     replication_key = "name"
     replication_method = "INCREMENTAL"
     instance_name = ""
@@ -3565,7 +3533,8 @@ class WorkflowStream(JiraStream):
 
 
 class Resolutions(JiraStream):
-    """
+    """Resolution stream.
+
     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-resolutions/#api-rest-api-3-resolution-get
     """
 
@@ -3584,7 +3553,7 @@ class Resolutions(JiraStream):
 
     records_jsonpath = "$[values][*]"
 
-    primary_keys = ["id"]
+    primary_keys = ("id",)
 
     instance_name = "values"
 
@@ -3597,8 +3566,8 @@ class Resolutions(JiraStream):
 
 
 class WorkflowSearchStream(JiraStream):
+    """Workflow search stream.
 
-    """
     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-workflows/#api-rest-api-3-workflow-get
     """
 
@@ -3613,32 +3582,39 @@ class WorkflowSearchStream(JiraStream):
 
     name = "workflow_searches"
     path = "/workflow/search"
-    primary_keys = ["id"]
+    primary_keys = ("name", "entityId")
     replication_key = "updated"
     replication_method = "INCREMENTAL"
     records_jsonpath = "$[values][*]"  # Or override `parse_response`.
     instance_name = "values"
 
     schema = PropertiesList(
-        Property(
-            "id",
-            ObjectType(
-                Property("name", StringType),
-                Property("entityId", StringType),
-            ),
-        ),
+        Property("name", StringType),
+        Property("entityId", StringType),
         Property("description", StringType),
         Property("created", StringType),
         Property("updated", StringType),
     ).to_dict()
+
+    def post_process(self, row: dict, context: dict | None) -> dict:  # noqa: ARG002
+        """Post-process the record before it is returned.
+
+        Flattens the id object into separate name and entityId fields.
+        """
+        if "id" in row:
+            # Extract values from the id object
+            id_obj = row.pop("id")
+            row["name"] = id_obj.get("name")
+            row["entityId"] = id_obj.get("entityId")
+        return row
 
 
 # Child Streams
 
 
 class IssueWatchersStream(JiraStream):
+    """Issue Watchers.
 
-    """
     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-workflows/#api-rest-api-3-workflow-get
     """
 
@@ -3655,35 +3631,27 @@ class IssueWatchersStream(JiraStream):
     path = "/issue/{issue_id}/watchers"
     parent_stream_type = IssueStream
     ignore_parent_replication_keys = False
-    primary_keys = ["id"]
-    records_jsonpath = "$[*]"  # Or override `parse_response`.
+    primary_keys = ("accountId",)
+    records_jsonpath = "$[watchers][*]"
     instance_name = ""
 
     schema = PropertiesList(
-        Property("self", StringType),
-        Property("watchCount", IntegerType),
-        Property(
-            "watchers",
-            ArrayType(
-                ObjectType(
-                    Property("accountId", StringType),
-                    Property("accountType", StringType),
-                    Property("active", BooleanType),
-                    Property("displayName", StringType),
-                )
-            ),
-        ),
+        Property("accountId", StringType),
+        Property("accountType", StringType),
+        Property("active", BooleanType),
+        Property("displayName", StringType),
         Property("issueId", StringType),
     ).to_dict()
 
     def post_process(self, row: dict, context: dict) -> dict:
+        """Post-process the record before it is returned."""
         row["issueId"] = context["issue_id"]
         return row
 
 
 class IssueChangeLogStream(JiraStream):
+    """Issue Change Log.
 
-    """
     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-workflows/#api-rest-api-3-workflow-get
     """
 
@@ -3706,13 +3674,13 @@ class IssueChangeLogStream(JiraStream):
 
     replication_key = "created"
 
-    primary_keys = ["id"]
+    primary_keys = ("id",)
 
     records_jsonpath = "$[values][*]"
 
     instance_name = "values"
 
-    next_page_token_jsonpath = None
+    next_page_token_jsonpath = None  # type: ignore[assignment]
 
     schema = PropertiesList(
         Property("id", StringType),
@@ -3730,19 +3698,20 @@ class IssueChangeLogStream(JiraStream):
                     Property("fromString", StringType),
                     Property("to", StringType),
                     Property("toString", StringType),
-                )
+                ),
             ),
         ),
     ).to_dict()
 
     def post_process(self, row: dict, context: dict) -> dict:
+        """Post-process the record before it is returned."""
         row["issueId"] = context["issue_id"]
         return row
 
 
 class IssueComments(JiraStream):
+    """Issue Comments.
 
-    """
     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-comments/#api-rest-api-3-issue-issueidorkey-comment-get
     """
 
@@ -3763,13 +3732,13 @@ class IssueComments(JiraStream):
 
     path = "/issue/{issue_id}/comment"
 
-    primary_keys = ["id"]
+    primary_keys = ("id",)
 
     records_jsonpath = "$[comments][*]"
 
     instance_name = "comments"
 
-    next_page_token_jsonpath = None
+    next_page_token_jsonpath = None  # type: ignore[assignment]
 
     schema = PropertiesList(
         Property("id", StringType),
@@ -3786,30 +3755,7 @@ class IssueComments(JiraStream):
         ),
         Property("created", DateTimeType),
         Property("updated", DateTimeType),
-        Property(
-            "body",
-            ObjectType(
-                Property("type", StringType),
-                Property("version", IntegerType),
-                Property(
-                    "content",
-                    ArrayType(
-                        ObjectType(
-                            Property("type", StringType),
-                            Property(
-                                "content",
-                                ArrayType(
-                                    ObjectType(
-                                        Property("type", StringType),
-                                        Property("text", StringType),
-                                    )
-                                ),
-                            ),
-                        )
-                    ),
-                ),
-            ),
-        ),
+        Property("body", ADFRootBlockNode),
         Property(
             "updateAuthor",
             ObjectType(
@@ -3822,12 +3768,14 @@ class IssueComments(JiraStream):
     ).to_dict()
 
     def post_process(self, row: dict, context: dict) -> dict:
+        """Post-process the record before it is returned."""
         row["issueId"] = context["issue_id"]
         return row
 
 
 class IssueWorklogs(JiraStream):
-    """
+    """Issue Worklogs.
+
     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-comments/#api-rest-api-3-issue-issueidorkey-comment-get
     """
 
@@ -3848,13 +3796,13 @@ class IssueWorklogs(JiraStream):
 
     path = "/issue/{issue_id}/worklog"
 
-    primary_keys = ["id"]
+    primary_keys = ("id",)
 
     records_jsonpath = "$[worklogs][*]"
 
     instance_name = "worklogs"
 
-    next_page_token_jsonpath = None
+    next_page_token_jsonpath = None  # type: ignore[assignment]
 
     schema = PropertiesList(
         Property("id", StringType),
